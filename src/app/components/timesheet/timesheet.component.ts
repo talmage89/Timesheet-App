@@ -1,7 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { AbstractControl, FormControl, ValidatorFn } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Observable } from 'rxjs';
+import { Observable, switchMap, tap  } from 'rxjs';
+
 import { Department } from 'src/app/interfaces/department';
 import { Employee } from 'src/app/interfaces/employee';
 import { DepartmentsService } from 'src/app/services/departments.service';
@@ -30,9 +31,15 @@ export class TimesheetComponent implements OnInit {
   ngOnInit(): void {
     this.$departments = this.departmentsService.getDepartments();
 
-    this.$departments.subscribe(x => {
-      this.department = x.find(department => department.id === this.route.snapshot.params['id']);
-    })
+    this.$departments.pipe(
+      switchMap(departments => {
+        this.department = departments.find(dept => dept.id === this.route.snapshot.params['id']);
+        return this.employeeService.getEmployeeHoursByDepartment(this.department.id);
+      }),
+      tap(employees => {
+        this.employees = employees;
+      })
+    ).subscribe();
   }
 
   addEmployee(): void {
@@ -75,15 +82,18 @@ export class TimesheetComponent implements OnInit {
       employee.friday + employee.saturday + employee.sunday;
   }
 
-  deleteEmployee(index: number): void {
+  deleteEmployee(employee: Employee, index: number): void {
+    if (employee) {
+      this.employeeService.deleteEmployeeHours(this.employees[index]);
+    }
     this.employees.splice(index, 1);
   }
 
   submit(): void {
     this.employees.forEach(employee => {
-      this.employeeService.saveEmployeeHours(employee);
+      if (employee.id) this.employeeService.updateEmployeeHours(employee)
+      else this.employeeService.saveEmployeeHours(employee);
     })
-
     this.router.navigate(['/departments']);
   }
 
